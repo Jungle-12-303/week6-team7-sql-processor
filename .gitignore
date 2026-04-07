@@ -1,0 +1,22 @@
+# Build outputs
+build/
+*.exe
+*.obj
+*.ilk
+*.pdb
+*.idb
+*.lib
+*.exp
+*.manifest
+
+# Visual Studio
+.vs/
+
+# Test temporary files
+tests/tmp/
+
+# Local notes and personal working files
+local/
+
+# Common logs
+*.log
