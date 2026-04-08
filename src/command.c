@@ -1,7 +1,13 @@
-﻿#include "command.h"
+#include "command.h"
 
 #include <stdlib.h>
 
+/*
+ * SqlCommand 구조체를 초기 상태로 되돌린다.
+ *
+ * Parser가 결과를 채우기 전에 안전한 빈 상태를 만들거나,
+ * 메모리 해제 후 다시 재사용 가능한 상태를 만들 때 사용한다.
+ */
 void sql_command_init(SqlCommand *command) {
     if (command == NULL) {
         return;
@@ -15,6 +21,12 @@ void sql_command_init(SqlCommand *command) {
     command->value_count = 0;
 }
 
+/*
+ * SqlCommand 내부에 동적으로 할당된 문자열과 배열을 모두 해제한다.
+ *
+ * table_name, columns, values는 Parser 과정에서 malloc/realloc으로 생성될 수 있으므로,
+ * 명령 사용이 끝난 뒤 반드시 이 함수로 정리해야 메모리 누수를 막을 수 있다.
+ */
 void sql_command_free(SqlCommand *command) {
     size_t index = 0;
 

@@ -1,4 +1,4 @@
-﻿# SQL Processor 학습 가이드
+# SQL Processor 학습 가이드
 
 이 디렉터리는 현재 구현된 SQL Processor를 빠르게 이해하기 위한 학습용 문서를 모아둔 곳입니다.
 
@@ -12,10 +12,10 @@
 
 이 시스템은 아주 단순한 SQL 처리기입니다.
 
-- SQL 파일을 읽는다.
+- SQL 파일을 읽거나 interactive 입력을 받는다.
 - SQL 문을 파싱한다.
 - `INSERT`면 CSV 파일에 데이터를 추가한다.
-- `SELECT`면 CSV 파일에서 데이터를 읽어 출력한다.
+- `SELECT`면 CSV 파일에서 데이터를 읽어 표 형식으로 출력한다.
 
 지원 범위는 의도적으로 작게 잡혀 있습니다.
 
@@ -63,6 +63,14 @@ INSERT INTO users (id, name) VALUES (1, 'jungle');
 
 ```sql
 SELECT id, name FROM users;
+```
+
+interactive 모드까지 보려면 프로그램을 인자 없이 실행한 뒤 아래처럼 입력하면 됩니다.
+
+```text
+sql> INSERT INTO users (id, name) VALUES (1, 'jungle');
+sql> SELECT id, name FROM users;
+sql> exit
 ```
 
 ### 3. 테스트로 검증 포인트 보기
