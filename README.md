@@ -5,30 +5,39 @@
 
 ## 주요 기능
 
-- SQL 파일 입력 처리
-- interactive SQL 입력 처리
-- `INSERT` 지원
-- `SELECT` 지원
-- CSV 파일 기반 데이터 저장/조회
-- `SELECT` 결과 표 형식 출력
-- 단위 테스트 및 통합 테스트 제공
+`SQL 파일 입력 처리` `interactive SQL 입력 처리` `INSERT 지원` `SELECT 지원` `CSV 파일 기반 데이터 저장/조회` `SELECT 결과 표 형식 출력` `단위 테스트 및 통합 테스트 제공`
 
 ## 지원하지 않는 기능
 
-- `CREATE TABLE`
-- `UPDATE`
-- `DELETE`
-- `JOIN`
-- `WHERE`
-- 트랜잭션
-- 별도 스키마 메타데이터
-- 타입 검증
+`CREATE TABLE` `UPDATE` `DELETE` `JOIN` `WHERE` `트랜잭션` `별도 스키마 메타데이터` `타입 검증`
 
 ## 동작 방식
 
-전체 처리 흐름은 아래와 같습니다.
+전체 처리 흐름은 아래와 같습니다:
 
-`main -> cli_runner -> parser -> command -> executor -> storage`
+```
+main  -->  run_cli  -->  command init  -->  parser  -->  executor  -->  storage -->  command free
+         (명령 집행)     (구조체 초기화)     (파싱/할당)               (CSV 읽기/쓰기)  (메모리 해제)
+```
+
+컴포넌트 다이어그램
+
+```mermaid
+graph TD
+    U[User CLI] --> M[main.c]
+    M --> CR[cli_runner.c]
+    CR --> P[parser.c]
+    CR --> CMD[command.c]
+    CR --> E[executor.c]
+    E --> S[storage.c]
+    S --> D[(data/*.csv)]
+
+    P -. fills .-> CMD
+    CMD -. lifecycle init/free .-> CR
+
+```
+
+함수명 별 요약 기술
 
 - main: 프로그램 시작점 => cli_runner.c로 제어권을 바로 넘김
 - cli_ruuner: 입력을 받아 파싱과 실행을 연결 
@@ -52,7 +61,7 @@
     ```
 - command: 메모리 생명 주기를 전담하여 관리(힙 영역)
     ```
-    -> 파싱 된 데이터가(SqlCommand)가 힙에 할당: 다음 계층에서 이 데이터를 사용
+    -> 파싱 된 데이터가(SqlCommand)가 힙에 할당
     -> 처리가 끝나면, sql_command_free(&command)로 메모리 해제
     ```  
 - executor: INSERT/SELECT 분기 => 명령어가 비대해 질 경우, storage.c 파일 분리를 위해
@@ -294,22 +303,5 @@ sequenceDiagram
     end
 
     C-->>U: print result or error
-
-```
-
-## 컴포넌트 다이어그램
-
-```mermaid
-graph TD
-    U[User CLI] --> M[main.c]
-    M --> CR[cli_runner.c]
-    CR --> P[parser.c]
-    CR --> CMD[command.c]
-    CR --> E[executor.c]
-    E --> S[storage.c]
-    S --> D[(data/*.csv)]
-
-    P -. fills .-> CMD
-    CMD -. lifecycle init/free .-> CR
 
 ```
