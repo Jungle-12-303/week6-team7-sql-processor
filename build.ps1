@@ -1,4 +1,4 @@
-﻿param()
+param()
 
 $ErrorActionPreference = "Stop"
 
@@ -33,7 +33,7 @@ $appSources = @(
 )
 
 if ($compiler -eq "cl") {
-    $commonArgs = @("/nologo", "/W4", "/D_CRT_SECURE_NO_WARNINGS", "/Iinclude")
+    $commonArgs = @("/nologo", "/W4", "/utf-8", "/D_CRT_SECURE_NO_WARNINGS", "/Iinclude")
 
     & cl @commonArgs "/Febuild\sql_processor.exe" @appSources
     & cl @commonArgs "/Febuild\test_parser.exe" "tests\unit\test_parser.c" "src\parser.c" "src\command.c"
