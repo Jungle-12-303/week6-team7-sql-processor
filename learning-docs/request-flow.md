@@ -1,4 +1,4 @@
-﻿# 요청 흐름 따라가기
+# 요청 흐름 따라가기
 
 ## 1. `INSERT` 흐름
 
@@ -14,9 +14,11 @@ INSERT INTO users (id, name) VALUES (1, 'jungle');
 
 즉, 진짜 시작점은 `src/cli_runner.c`입니다.
 
-### 단계 2. SQL 파일 읽기
+### 단계 2. SQL 입력 받기
 
-`run_cli_with_streams()` 안에서 `read_file_to_string()`이 SQL 파일 전체를 문자열로 읽습니다.
+파일 입력 모드에서는 `run_cli_with_streams()` 안에서 `read_file_to_string()`이 SQL 파일 전체를 문자열로 읽습니다.
+
+interactive 모드에서는 한 줄씩 읽은 SQL 문자열을 바로 실행합니다.
 
 여기서 실패하면 바로 오류를 출력하고 종료합니다.
 
@@ -82,7 +84,7 @@ SELECT id, name FROM users;
 
 앞부분은 `INSERT`와 같습니다.
 
-- CLI가 파일 읽기
+- CLI가 SQL 입력 읽기
 - Parser가 SQL 해석
 - Executor가 실행 분기
 
@@ -114,12 +116,15 @@ id,name
 2,sql
 ```
 
-출력은 아래처럼 만들어집니다.
+출력은 아래처럼 표 형식으로 만들어집니다.
 
 ```text
-id,name
-1,jungle
-2,sql
++----+--------+
+| id | name   |
++----+--------+
+| 1  | jungle |
+| 2  | sql    |
++----+--------+
 ```
 
 ### 단계 4. 컬럼 순서 바꾸기
@@ -133,14 +138,36 @@ SELECT name, id FROM users;
 출력은 이렇게 바뀝니다.
 
 ```text
-name,id
-jungle,1
-sql,2
++--------+----+
+| name   | id |
++--------+----+
+| jungle | 1  |
+| sql    | 2  |
++--------+----+
 ```
 
 즉, 출력 순서는 파일 순서가 아니라 요청 순서를 따릅니다.
 
-## 3. 실패 흐름은 어디서 끊기나
+## 3. Interactive 모드 흐름
+
+interactive 모드에서는 프로그램을 인자 없이 실행합니다.
+
+```text
+Interactive SQL mode. Type 'exit' to quit.
+sql>
+```
+
+이후 흐름은 파일 입력 모드와 거의 같지만, SQL 한 줄을 읽을 때마다 바로 아래 순서로 반복됩니다.
+
+1. 프롬프트 출력
+2. 한 줄 입력 읽기
+3. `exit` 또는 `quit`인지 확인
+4. SQL 파싱 및 실행
+5. 결과 출력
+
+즉, 큰 아키텍처는 같고 입력 시작점만 다릅니다.
+
+## 4. 실패 흐름은 어디서 끊기나
 
 ### CLI 단계에서 실패
 

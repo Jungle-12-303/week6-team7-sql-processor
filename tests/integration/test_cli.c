@@ -1,4 +1,4 @@
-﻿#include "cli_runner.h"
+#include "cli_runner.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -296,7 +296,7 @@ static void test_cli_interactive_insert_and_select(void) {
             input_path,
             "INSERT INTO users (id, name) VALUES (2, 'sql');\n"
             "SELECT id, name FROM users;\n"
-            "exit\n"
+            "exit   \n"
         );
         test_write_file(stdout_path, "");
         test_write_file(stderr_path, "");

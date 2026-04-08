@@ -1,4 +1,4 @@
-﻿# 테스트 문서
+# 테스트 문서
 
 ## 1. 문서 목적
 
@@ -53,12 +53,13 @@
 - CSV에 새 행 추가
 - 헤더 기준 컬럼 조회
 - 요청 컬럼 순서대로 결과 반환
+- 표 형식 `SELECT` 출력 생성
 - 존재하지 않는 컬럼 조회 실패
 - 존재하지 않는 테이블 파일 실패
 - CSV 제약 위반 값 실패
 - 손상된 CSV 행 실패
 
-이 테스트는 `src/storage.c`가 파일 기반 저장 규칙을 올바르게 처리하는지 확인한다.
+이 테스트는 `src/storage.c`가 파일 기반 저장 규칙과 표 형식 출력 규칙을 올바르게 처리하는지 확인한다.
 
 ## 5. CLI 통합 테스트
 
@@ -70,12 +71,15 @@
 
 - SQL 파일로 `INSERT` 실행 성공
 - SQL 파일로 `SELECT` 실행 성공
+- interactive CLI에서 `INSERT` 실행 성공
+- interactive CLI에서 `SELECT` 실행 성공
+- interactive CLI에서 `exit` 종료 성공
 - 잘못된 SQL 파일 실패
 - 존재하지 않는 입력 파일 실패
 - 빈 SQL 파일 실패
 - 공백만 있는 SQL 파일 실패
 
-이 테스트는 실제 사용자 관점에서 `run_cli_with_streams()`가 끝까지 올바르게 동작하는지 확인한다.
+이 테스트는 실제 사용자 관점에서 `run_cli_with_streams()`와 `run_cli_interactive_with_streams()`가 끝까지 올바르게 동작하는지 확인한다.
 
 ## 6. 테스트 실행 방법
 
@@ -97,6 +101,7 @@ PowerShell에서 아래 명령을 실행한다.
 
 - 현재 빌드 스크립트는 `cl` 또는 `gcc`를 찾는다.
 - Windows에서는 Visual Studio C/C++ Build Tools 환경이 필요하다.
+- 기본 PowerShell을 새로 열면 PowerShell 프로필에서 Visual Studio 개발자 셸을 자동으로 로드하도록 설정할 수 있다.
 
 ## 7. 최근 실행 결과
 
@@ -126,7 +131,9 @@ PowerShell에서 아래 명령을 실행한다.
 - 성공 경로가 동작하는가
 - 기본 실패 경로가 막혀 있는가
 - CSV 헤더 기반 컬럼 조회가 맞는가
+- `SELECT` 결과 표 형식이 일관적인가
 - CLI에서 오류가 사용자에게 보이는가
+- interactive CLI에서 입력과 종료가 자연스러운가
 
 반면 아래는 아직 깊게 검증하지 않는다.
 

@@ -1,4 +1,4 @@
-﻿#include "cli_runner.h"
+#include "cli_runner.h"
 
 #include "command.h"
 #include "executor.h"
@@ -94,11 +94,22 @@ static int execute_sql_text(const char *sql, FILE *out_stream, FILE *err_stream)
 }
 
 static int is_exit_command(const char *line) {
-    while (*line != '\0' && isspace((unsigned char) *line)) {
-        line++;
+    const char *start = line;
+    const char *end = NULL;
+    size_t length = 0;
+
+    while (*start != '\0' && isspace((unsigned char) *start)) {
+        start++;
     }
 
-    return strcmp(line, "exit") == 0 || strcmp(line, "quit") == 0;
+    end = start + strlen(start);
+    while (end > start && isspace((unsigned char) *(end - 1))) {
+        end--;
+    }
+
+    length = (size_t) (end - start);
+    return (length == 4 && strncmp(start, "exit", length) == 0)
+        || (length == 4 && strncmp(start, "quit", length) == 0);
 }
 
 int run_cli_interactive_with_streams(FILE *input_stream, FILE *out_stream, FILE *err_stream) {
