@@ -30,18 +30,36 @@
 
 `main -> cli_runner -> parser -> command -> executor -> storage`
 
-- `main`
-  프로그램 시작점이며, CLI 실행 함수로 제어를 넘깁니다.
-- `cli_runner`
-  SQL 파일 입력 또는 interactive 입력을 받아 파싱과 실행을 연결합니다.
-- `parser`
-  SQL 문자열을 해석해 `SqlCommand` 구조체 형태로 변환합니다.
-- `command`
-  파싱 결과를 담는 공용 데이터 구조를 제공합니다.
-- `executor`
-  명령 종류를 보고 `INSERT`와 `SELECT` 실행 경로를 분기합니다.
-- `storage`
-  `data/<table>.csv` 파일을 읽거나 써서 실제 저장과 조회를 수행합니다.
+- main: 프로그램 시작점 => cli_runner.c로 제어권을 바로 넘김
+- cli_ruuner: 입력을 받아 파싱과 실행을 연결 
+    ```
+    run_cli
+    -> run_cli_with_streams
+        -> read_file_to_string -> execute_sql_text (파일 모드: 경로를 명시한 파일 명령어를 읽음)
+        -> run_cli_interactive_with_streams (인터랙티브 모드: 직접 타이핑한 명령어를 읽음)
+            -> execute_sql_text (sql 명령어 실행)
+            -> is_exit_command (종료)    
+    ```
+- parser: SQL명령어를 해석하여 SqlCommand 형태로 가공 (select <-> insert 분기)
+    ```
+    파싱 전: INSERT INTO users (id, name) VALUES (1, 'jungle');
+    파싱 후: type = SQL_COMMAND_INSERT
+            table_name = "users"
+            columns = ["id", "name"]
+            column_count = 2
+            values = ["1", "jungle"]
+            value_count = 2
+    ```
+- command: 메모리 생명 주기를 전담하여 관리(힙 영역)
+    ```
+    -> 파싱 된 데이터가(SqlCommand)가 힙에 할당: 다음 계층에서 이 데이터를 사용
+    -> 처리가 끝나면, sql_command_free(&command)로 메모리 해제
+    ```  
+- executor: INSERT/SELECT 분기 => 명령어가 비대해 질 경우, storage.c 파일 분리를 위해
+- storage: CSV파일에서 실제로 저장 및 조회 수행 
+    ```
+    아직 공사 중...
+    ```
 
 ### `SqlCommand`의 역할
 
