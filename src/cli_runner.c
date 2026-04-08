@@ -4,8 +4,12 @@
 #include "executor.h"
 #include "parser.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#define CLI_LINE_BUFFER_SIZE 4096
 
 static int read_file_to_string(const char *path, char **contents, char *error, size_t error_size) {
     FILE *file = NULL;
@@ -59,15 +63,84 @@ static int read_file_to_string(const char *path, char **contents, char *error, s
     return 1;
 }
 
-int run_cli_with_streams(int argc, char **argv, FILE *out_stream, FILE *err_stream) {
+static int execute_sql_text(const char *sql, FILE *out_stream, FILE *err_stream) {
     char error[256];
-    char *sql = NULL;
     char *output = NULL;
     SqlCommand command;
     int success = 0;
 
     sql_command_init(&command);
     error[0] = '\0';
+
+    if (!parse_sql(sql, &command, error, sizeof(error))) {
+        fprintf(err_stream, "ERROR: %s\n", error);
+        sql_command_free(&command);
+        return 1;
+    }
+
+    success = execute_command(&command, &output, error, sizeof(error));
+    if (!success) {
+        fprintf(err_stream, "ERROR: %s\n", error);
+        sql_command_free(&command);
+        free(output);
+        return 1;
+    }
+
+    fputs(output, out_stream);
+
+    sql_command_free(&command);
+    free(output);
+    return 0;
+}
+
+static int is_exit_command(const char *line) {
+    while (*line != '\0' && isspace((unsigned char) *line)) {
+        line++;
+    }
+
+    return strcmp(line, "exit") == 0 || strcmp(line, "quit") == 0;
+}
+
+int run_cli_interactive_with_streams(FILE *input_stream, FILE *out_stream, FILE *err_stream) {
+    char line[CLI_LINE_BUFFER_SIZE];
+
+    fprintf(out_stream, "Interactive SQL mode. Type 'exit' to quit.\n");
+
+    while (1) {
+        size_t length = 0;
+
+        fprintf(out_stream, "sql> ");
+        if (fgets(line, sizeof(line), input_stream) == NULL) {
+            fprintf(out_stream, "\n");
+            return 0;
+        }
+
+        length = strlen(line);
+        while (length > 0 && (line[length - 1] == '\n' || line[length - 1] == '\r')) {
+            line[length - 1] = '\0';
+            length--;
+        }
+
+        if (line[0] == '\0') {
+            continue;
+        }
+
+        if (is_exit_command(line)) {
+            return 0;
+        }
+
+        execute_sql_text(line, out_stream, err_stream);
+    }
+}
+
+int run_cli_with_streams(int argc, char **argv, FILE *out_stream, FILE *err_stream) {
+    char error[256];
+    char *sql = NULL;
+    int result = 0;
+
+    if (argc == 1) {
+        return run_cli_interactive_with_streams(stdin, out_stream, err_stream);
+    }
 
     if (argc != 2) {
         fprintf(err_stream, "Usage: sql_processor <sql-file>\n");
@@ -79,27 +152,9 @@ int run_cli_with_streams(int argc, char **argv, FILE *out_stream, FILE *err_stre
         return 1;
     }
 
-    if (!parse_sql(sql, &command, error, sizeof(error))) {
-        fprintf(err_stream, "ERROR: %s\n", error);
-        free(sql);
-        return 1;
-    }
-
-    success = execute_command(&command, &output, error, sizeof(error));
-    if (!success) {
-        fprintf(err_stream, "ERROR: %s\n", error);
-        sql_command_free(&command);
-        free(sql);
-        free(output);
-        return 1;
-    }
-
-    fputs(output, out_stream);
-
-    sql_command_free(&command);
+    result = execute_sql_text(sql, out_stream, err_stream);
     free(sql);
-    free(output);
-    return 0;
+    return result;
 }
 
 int run_cli(int argc, char **argv) {
