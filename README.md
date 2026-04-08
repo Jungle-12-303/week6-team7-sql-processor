@@ -23,16 +23,33 @@
 
 ## 동작 방식(src 폴더를 중심으로)
 
-전체 흐름은 아래와 같습니다.
+<br /> 계층적 구조로 만들어져 있음. 각 단계별 함수를 호출하여, storage에서 CSV 파일에 최종 접속, 결과값 반환
 
-`CLI -> Parser -> Executor -> Storage`
+`main -> cli_runner -> parser -> command -> executor -> storage`
 
-설명:
-
-- CLI가 SQL 파일을 읽는다.
-- Parser가 SQL을 `SqlCommand` 구조체로 바꾼다.
-- Executor가 명령 종류를 보고 실행을 분기한다.
-- Storage가 `data/<table>.csv` 파일을 읽거나 쓴다.
+- main: 프로그램 시작점 => cli_runner.c로 제어권을 바로 넘김
+- cli_ruuner: 입력을 받아 파싱과 실행을 연결 
+    ```
+    run_cli
+    -> run_cli_with_streams
+        -> read_file_to_string -> execute_sql_text (파일 모드: 경로를 명시한 파일 명령어를 읽음)
+        -> run_cli_interactive_with_streams (인터랙티브 모드: 직접 타이핑한 명령어를 읽음)
+            -> execute_sql_text (sql 명령어 실행)
+            -> is_exit_command (종료)    
+    ```
+- parser: SQL명령어를 해석하여 SqlCommand 형태로 가공 (select <-> insert 분기)
+    ```
+    파싱 전: INSERT INTO users (id, name) VALUES (1, 'jungle');
+    파싱 후: type = SQL_COMMAND_INSERT
+            table_name = "users"
+            columns = ["id", "name"]
+            column_count = 2
+            values = ["1", "jungle"]
+            value_count = 2
+    ```
+- command: 파싱 결과를 담는 역할
+- executor: INSERT/SELECT 분기
+- storage: CSV파일에서 실제로 저장 및 조회 수행 
 
 
 ## SQL 예시
@@ -71,7 +88,8 @@ data/           런타임 CSV 테이블 파일
 
 예:
 
-```1. Developer PowerShell for VS 2022 키기
+```
+1. Developer PowerShell for VS 2022 키기
 2. 해당 폴더로 경로 이동 (예시 => C:\Jungle\week6-team7-sql-processor)
 3. 명령어 실행(빌드) => .\build\sql_processor.exe 
 4. sql> 이 뜨면 성공!
@@ -101,8 +119,8 @@ data/           런타임 CSV 테이블 파일
 
 각 멤버의 회고는 다음과 같습니다:
 
-윤형민:
-이우진:
-이호준:
-황정연:
+윤형민: <br />
+이우진: <br />
+이호준: <br />
+황정연: <br />
 
