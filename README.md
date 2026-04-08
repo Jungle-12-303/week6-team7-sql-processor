@@ -21,7 +21,7 @@
 - 별도 스키마 메타데이터
 - 타입 검증
 
-## 동작 방식
+## 동작 방식(src 폴더를 중심으로)
 
 전체 흐름은 아래와 같습니다.
 
@@ -34,29 +34,6 @@
 - Executor가 명령 종류를 보고 실행을 분기한다.
 - Storage가 `data/<table>.csv` 파일을 읽거나 쓴다.
 
-## 저장 형식
-
-각 테이블은 CSV 파일 하나로 관리합니다.
-
-예:
-
-```text
-data/users.csv
-```
-
-파일 예시:
-
-```text
-id,name
-1,jungle
-2,sql
-```
-
-규칙:
-
-- 첫 줄은 컬럼명 헤더
-- 이후 줄은 데이터
-- 테이블명 `<table>`은 `data/<table>.csv`에 매핑
 
 ## SQL 예시
 
@@ -72,34 +49,15 @@ INSERT INTO users (id, name) VALUES (1, 'jungle');
 SELECT id, name FROM users;
 ```
 
-주의:
-
-- 세미콜론(`;`)은 필수입니다.
-- 한 번에 SQL 문 1개만 처리합니다.
-
-## 디렉터리 구조
+## 주요 디렉터리 구조
 
 ```text
-src/            구현 코드
+src/            구현 코드()
 include/        헤더 파일
 tests/          단위 테스트 / 통합 테스트
-docs/           요구사항, 아키텍처, 테스트 문서
-learning-docs/  학습용 문서
 data/           런타임 CSV 테이블 파일
 ```
 
-## 빌드 방법
-
-PowerShell에서:
-
-```powershell
-.\build.ps1
-```
-
-현재 스크립트는 아래 컴파일러 중 하나를 찾습니다.
-
-- Visual C++ `cl`
-- `gcc`
 
 ## 테스트 실행
 
@@ -109,17 +67,13 @@ PowerShell에서:
 .\run_tests.ps1
 ```
 
-테스트 항목은 아래 문서를 참고하세요.
-
-- [docs/testing.md](C:\developer_folder\jungle-sql-processor\docs\testing.md)
-
 ## 실행 방법
 
 예:
 
 ```1. Developer PowerShell for VS 2022 키기
 2. 해당 폴더로 경로 이동 (예시 => C:\Jungle\week6-team7-sql-processor)
-3. 명령어 실행 => .\build\sql_processor.exe 
+3. 명령어 실행(빌드) => .\build\sql_processor.exe 
 4. sql> 이 뜨면 성공!
 ```
 
@@ -135,10 +89,20 @@ PowerShell에서:
 이 프로젝트는 과제 요구사항에 맞춘 최소 구현입니다.
 
 즉, 아래에 초점을 맞췄습니다.
-
+`
 - 읽기 쉬운 구조
 - 빠르게 이해 가능한 흐름
 - 테스트 가능한 최소 기능
 - SQL 처리의 핵심 흐름 체험
 
 더 복잡한 DB 기능은 이후 확장 대상으로 남겨두었습니다.
+
+## 회고
+
+각 멤버의 회고는 다음과 같습니다:
+
+윤형민:
+이우진:
+이호준:
+황정연:
+
