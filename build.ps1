@@ -14,14 +14,14 @@ function Get-Compiler {
     throw "No supported C compiler was found in PATH. Install Visual C++ Build Tools or GCC."
 }
 
-function Ensure-Directory([string]$Path) {
+function Initialize-Directory([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) {
         New-Item -ItemType Directory -Path $Path | Out-Null
     }
 }
 
 $compiler = Get-Compiler
-Ensure-Directory "build"
+Initialize-Directory "build"
 
 $appSources = @(
     "src\main.c",
