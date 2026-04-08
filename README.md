@@ -47,9 +47,16 @@
             values = ["1", "jungle"]
             value_count = 2
     ```
-- command: 파싱 결과를 담는 역할
-- executor: INSERT/SELECT 분기
+- command: 메모리 생명 주기를 전담하여 관리(힙 영역)
+    ```
+    -> 파싱 된 데이터가(SqlCommand)가 힙에 할당: 다음 계층에서 이 데이터를 사용
+    -> 처리가 끝나면, sql_command_free(&command)로 메모리 해제
+    ```  
+- executor: INSERT/SELECT 분기 => 명령어가 비대해 질 경우, storage.c 파일 분리를 위해
 - storage: CSV파일에서 실제로 저장 및 조회 수행 
+    ```
+    아직 공사 중...
+    ```
 
 
 ## SQL 예시
