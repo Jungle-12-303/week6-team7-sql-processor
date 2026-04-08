@@ -1,10 +1,17 @@
-﻿#include "storage.h"
+#include "storage.h"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * Storage 계층 내부에서 사용할 오류 메시지를 안전하게 복사한다.
+ *
+ * 오류 버퍼가 없거나 길이가 0이면 아무 작업도 하지 않고,
+ * 그렇지 않으면 전달받은 메시지를 잘라내지 않는 범위에서 복사한다.
+ * Storage 내부 보조 함수들이 공통적으로 호출하는 가장 기본적인 오류 기록 함수다.
+ */
 static void set_error(char *error, size_t error_size, const char *message) {
     if (error == NULL || error_size == 0) {
         return;
@@ -13,6 +20,13 @@ static void set_error(char *error, size_t error_size, const char *message) {
     snprintf(error, error_size, "%s", message);
 }
 
+/*
+ * 널 종료 문자열을 새 메모리에 복제한다.
+ *
+ * SELECT 결과 행을 별도 메모리에 저장하거나,
+ * CSV 한 줄에서 잘라낸 필드를 독립적으로 보관할 때 사용한다.
+ * 입력이 NULL이면 NULL을 반환하고, 메모리 할당 실패 시에도 NULL을 반환한다.
+ */
 static char *duplicate_string(const char *value) {
     size_t length = 0;
     char *copy = NULL;
@@ -31,6 +45,12 @@ static char *duplicate_string(const char *value) {
     return copy;
 }
 
+/*
+ * 두 문자열이 대소문자를 무시하면 같은지 확인한다.
+ *
+ * CSV 헤더와 SQL 컬럼 이름을 비교할 때 사용하며,
+ * 사용자가 `ID`, `Id`, `id`처럼 다른 대소문자로 입력해도 같은 컬럼으로 취급하게 해 준다.
+ */
 static int equals_ignore_case(const char *left, const char *right) {
     size_t index = 0;
 
@@ -48,6 +68,12 @@ static int equals_ignore_case(const char *left, const char *right) {
     return left[index] == '\0' && right[index] == '\0';
 }
 
+/*
+ * 파일에서 읽어 온 줄 끝의 개행 문자를 제거한다.
+ *
+ * `fgets`나 직접 읽기 함수로 가져온 문자열에는 `\n`, `\r\n`이 포함될 수 있다.
+ * CSV 헤더와 데이터 값을 안정적으로 비교하려면 먼저 줄 끝 개행을 제거해야 한다.
+ */
 static void trim_newline(char *value) {
     size_t length = 0;
 
@@ -62,6 +88,12 @@ static void trim_newline(char *value) {
     }
 }
 
+/*
+ * 테이블 이름으로 실제 CSV 파일 경로를 만든다.
+ *
+ * 현재 프로젝트는 각 테이블을 `data/<table>.csv` 파일 하나로 저장한다.
+ * 이 함수는 SQL에서 넘어온 테이블 이름을 파일 시스템 경로로 변환하는 Storage 계층의 진입점이다.
+ */
 static char *build_data_path(const char *table_name) {
     size_t length = 0;
     char *path = NULL;
@@ -76,6 +108,13 @@ static char *build_data_path(const char *table_name) {
     return path;
 }
 
+/*
+ * 파일에서 한 줄을 읽어 동적 메모리 문자열로 반환한다.
+ *
+ * 줄 길이를 미리 알 수 없으므로 버퍼를 점진적으로 늘리면서 읽는다.
+ * 개행을 만나면 그 줄에서 읽기를 멈추고, EOF에서 더 이상 읽을 내용이 없으면 NULL을 반환한다.
+ * header 한 줄, 각 데이터 행 한 줄을 처리하는 공통 유틸리티다.
+ */
 static char *read_line_alloc(FILE *file) {
     size_t capacity = 128;
     size_t length = 0;
@@ -113,6 +152,13 @@ static char *read_line_alloc(FILE *file) {
     return buffer;
 }
 
+/*
+ * 최소 CSV 규칙에 따라 한 줄을 쉼표 기준으로 분리한다.
+ *
+ * 이 프로젝트는 quoted CSV를 지원하지 않으므로 단순히 `,`를 기준으로 나눈다.
+ * 각 필드는 새 메모리로 복사되어 반환되며, 호출자는 free_string_list로 해제해야 한다.
+ * 메모리 할당이 실패하면 오류 메시지를 기록하고 0을 반환한다.
+ */
 static int split_csv_line(const char *line, char ***items, size_t *count, char *error, size_t error_size) {
     const char *start = NULL;
     const char *cursor = NULL;
@@ -173,6 +219,12 @@ static int split_csv_line(const char *line, char ***items, size_t *count, char *
     return 1;
 }
 
+/*
+ * 문자열 배열과 그 안의 각 항목을 모두 해제한다.
+ *
+ * CSV 헤더 목록, 한 행의 필드 목록, SELECT 결과로 모아 둔 행 목록 등
+ * Storage 계층 곳곳에서 같은 메모리 해제 패턴이 반복되므로 별도 함수로 분리했다.
+ */
 static void free_string_list(char **items, size_t count) {
     size_t index = 0;
 
@@ -187,6 +239,12 @@ static void free_string_list(char **items, size_t count) {
     free(items);
 }
 
+/*
+ * 컬럼 이름 목록에서 원하는 컬럼의 위치를 찾는다.
+ *
+ * 헤더 컬럼 순서와 SQL에서 요청한 컬럼 순서가 다를 수 있으므로,
+ * 실제 CSV 인덱스를 찾은 뒤 그 순서에 맞게 INSERT 값을 재배치하거나 SELECT 값을 추출한다.
+ */
 static int find_column_index(char **columns, size_t column_count, const char *target) {
     size_t index = 0;
 
@@ -199,6 +257,13 @@ static int find_column_index(char **columns, size_t column_count, const char *ta
     return -1;
 }
 
+/*
+ * INSERT 값이 현재의 최소 CSV 저장 규칙에 맞는지 검사한다.
+ *
+ * 이 프로젝트는 CSV escaping을 구현하지 않았기 때문에
+ * 값 안에 쉼표나 개행이 들어가면 파일 구조가 깨질 수 있다.
+ * 그래서 저장 전에 이러한 값을 미리 차단한다.
+ */
 static int validate_insert_value(const char *value, char *error, size_t error_size) {
     if (value == NULL) {
         set_error(error, error_size, "INSERT value cannot be null.");
@@ -213,6 +278,12 @@ static int validate_insert_value(const char *value, char *error, size_t error_si
     return 1;
 }
 
+/*
+ * 파일 끝에 새 행을 붙이기 전에 개행이 필요한지 확인한다.
+ *
+ * 기존 파일이 개행 없이 끝났다면 바로 데이터를 이어 쓰면
+ * 마지막 기존 행과 새 행이 붙어 버리므로, append 전에 `\n`을 하나 넣어야 한다.
+ */
 static int file_needs_newline(FILE *file) {
     long size = 0;
     int last_char = 0;
@@ -234,6 +305,12 @@ static int file_needs_newline(FILE *file) {
     return last_char != '\n';
 }
 
+/*
+ * 가변 길이 출력 버퍼 뒤에 문자열을 이어 붙인다.
+ *
+ * SELECT 결과는 행 수와 값 길이를 미리 알 수 없으므로
+ * 동적으로 커지는 문자열 버퍼에 표 형태 텍스트를 순서대로 쌓아 만든다.
+ */
 static int append_text(char **buffer, size_t *length, size_t *capacity, const char *text, char *error, size_t error_size) {
     size_t text_length = strlen(text);
     size_t required = *length + text_length + 1;
@@ -262,6 +339,12 @@ static int append_text(char **buffer, size_t *length, size_t *capacity, const ch
     return 1;
 }
 
+/*
+ * 같은 문자를 여러 번 출력 버퍼에 추가한다.
+ *
+ * 표의 가로 경계선(`----`)이나 값 오른쪽 padding 공백처럼
+ * 동일한 문자를 반복해 붙여야 할 때 사용한다.
+ */
 static int append_repeated_char(
     char **buffer,
     size_t *length,
@@ -285,6 +368,12 @@ static int append_repeated_char(
     return 1;
 }
 
+/*
+ * 값을 지정된 폭만큼 왼쪽 정렬로 출력하고 부족한 폭은 공백으로 채운다.
+ *
+ * 각 컬럼의 최대 너비에 맞춰 모든 행이 같은 폭으로 보이게 만드는 함수다.
+ * 예를 들어 `id` 컬럼 폭이 4면 `1` 뒤에 공백 3칸을 붙여 표 모양을 맞춘다.
+ */
 static int append_padded_value(
     char **buffer,
     size_t *length,
@@ -307,6 +396,12 @@ static int append_padded_value(
     return 1;
 }
 
+/*
+ * 표의 위/아래 경계선 한 줄을 만든다.
+ *
+ * 컬럼 폭이 `[2, 5]`라면 `+----+-------+` 형태의 줄을 생성한다.
+ * 헤더 위, 헤더 아래, 마지막 행 아래에서 동일한 함수를 사용한다.
+ */
 static int append_table_border(
     char **buffer,
     size_t *length,
@@ -335,6 +430,13 @@ static int append_table_border(
     return append_text(buffer, length, capacity, "\n", error, error_size);
 }
 
+/*
+ * 표의 데이터 행 또는 헤더 행 한 줄을 만든다.
+ *
+ * 전달된 값 배열을 각 컬럼 폭에 맞게 정렬해
+ * `| value | value |` 형태의 행 문자열을 출력 버퍼에 추가한다.
+ * 헤더도 같은 형식을 쓰므로 별도 함수로 나누지 않고 공용 처리한다.
+ */
 static int append_table_row(
     char **buffer,
     size_t *length,
@@ -368,6 +470,18 @@ static int append_table_row(
     return append_text(buffer, length, capacity, "\n", error, error_size);
 }
 
+/*
+ * INSERT 명령을 실제 CSV 파일 append 작업으로 수행한다.
+ *
+ * 처리 순서는 다음과 같다.
+ * 1. 테이블 파일 경로를 만든다.
+ * 2. 헤더를 읽어 실제 컬럼 순서를 확인한다.
+ * 3. SQL에서 받은 컬럼/값을 헤더 순서에 맞게 재배치한다.
+ * 4. 파일 끝 상태를 확인한 뒤 새 행을 append한다.
+ *
+ * 이 함수는 "컬럼 이름 검증 + 값 검증 + 파일 쓰기"를 한 번에 담당하는
+ * Storage 계층의 INSERT 구현체다.
+ */
 int storage_append_row(const SqlCommand *command, char *error, size_t error_size) {
     char *path = NULL;
     FILE *read_file = NULL;
@@ -470,6 +584,17 @@ cleanup:
     return ok;
 }
 
+/*
+ * SELECT 명령을 실행해 결과를 표 형태 문자열로 만든다.
+ *
+ * 처리 순서는 다음과 같다.
+ * 1. 헤더를 읽고 요청한 컬럼이 실제 파일에 존재하는지 확인한다.
+ * 2. 각 데이터 행에서 요청 컬럼만 추출해 메모리에 저장한다.
+ * 3. 가장 긴 값 기준으로 컬럼 폭을 계산한다.
+ * 4. 경계선/헤더/데이터 행을 조합해 최종 출력 문자열을 만든다.
+ *
+ * 최종 결과는 호출자가 free해야 하는 동적 문자열로 반환된다.
+ */
 int storage_select_rows(const SqlCommand *command, char **output, char *error, size_t error_size) {
     char *path = NULL;
     FILE *file = NULL;
