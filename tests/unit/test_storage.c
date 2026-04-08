@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../test_helpers.h"
 
@@ -51,7 +52,15 @@ static void test_append_and_select(void) {
     select_command.columns[1] = test_strdup("id");
 
     ASSERT_TRUE(storage_select_rows(&select_command, &select_output, error, sizeof(error)));
-    ASSERT_STREQ("name,id\nseed,1\njungle,2\n", select_output);
+    ASSERT_STREQ(
+        "+--------+----+\n"
+        "| name   | id |\n"
+        "+--------+----+\n"
+        "| seed   | 1  |\n"
+        "| jungle | 2  |\n"
+        "+--------+----+\n",
+        select_output
+    );
 
     free(select_output);
     sql_command_free(&insert_command);

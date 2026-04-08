@@ -262,6 +262,112 @@ static int append_text(char **buffer, size_t *length, size_t *capacity, const ch
     return 1;
 }
 
+static int append_repeated_char(
+    char **buffer,
+    size_t *length,
+    size_t *capacity,
+    char ch,
+    size_t count,
+    char *error,
+    size_t error_size
+) {
+    size_t index = 0;
+
+    for (index = 0; index < count; ++index) {
+        char text[2];
+        text[0] = ch;
+        text[1] = '\0';
+        if (!append_text(buffer, length, capacity, text, error, error_size)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int append_padded_value(
+    char **buffer,
+    size_t *length,
+    size_t *capacity,
+    const char *value,
+    size_t width,
+    char *error,
+    size_t error_size
+) {
+    size_t value_length = strlen(value);
+
+    if (!append_text(buffer, length, capacity, value, error, error_size)) {
+        return 0;
+    }
+
+    if (width > value_length && !append_repeated_char(buffer, length, capacity, ' ', width - value_length, error, error_size)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int append_table_border(
+    char **buffer,
+    size_t *length,
+    size_t *capacity,
+    const size_t *widths,
+    size_t column_count,
+    char *error,
+    size_t error_size
+) {
+    size_t index = 0;
+
+    if (!append_text(buffer, length, capacity, "+", error, error_size)) {
+        return 0;
+    }
+
+    for (index = 0; index < column_count; ++index) {
+        if (!append_repeated_char(buffer, length, capacity, '-', widths[index] + 2, error, error_size)) {
+            return 0;
+        }
+
+        if (!append_text(buffer, length, capacity, "+", error, error_size)) {
+            return 0;
+        }
+    }
+
+    return append_text(buffer, length, capacity, "\n", error, error_size);
+}
+
+static int append_table_row(
+    char **buffer,
+    size_t *length,
+    size_t *capacity,
+    char **values,
+    const size_t *widths,
+    size_t column_count,
+    char *error,
+    size_t error_size
+) {
+    size_t index = 0;
+
+    if (!append_text(buffer, length, capacity, "|", error, error_size)) {
+        return 0;
+    }
+
+    for (index = 0; index < column_count; ++index) {
+        if (!append_text(buffer, length, capacity, " ", error, error_size)) {
+            return 0;
+        }
+
+        if (!append_padded_value(buffer, length, capacity, values[index], widths[index], error, error_size)) {
+            return 0;
+        }
+
+        if (!append_text(buffer, length, capacity, " |", error, error_size)) {
+            return 0;
+        }
+    }
+
+    return append_text(buffer, length, capacity, "\n", error, error_size);
+}
+
 int storage_append_row(const SqlCommand *command, char *error, size_t error_size) {
     char *path = NULL;
     FILE *read_file = NULL;
@@ -371,10 +477,14 @@ int storage_select_rows(const SqlCommand *command, char **output, char *error, s
     char *row_line = NULL;
     char **header_columns = NULL;
     char **row_columns = NULL;
+    char ***selected_rows = NULL;
     int *requested_indices = NULL;
+    size_t *column_widths = NULL;
     size_t header_count = 0;
     size_t row_count = 0;
+    size_t selected_row_count = 0;
     size_t requested_index = 0;
+    size_t row_index = 0;
     size_t output_length = 0;
     size_t output_capacity = 0;
     int ok = 0;
@@ -414,29 +524,25 @@ int storage_select_rows(const SqlCommand *command, char **output, char *error, s
         goto cleanup;
     }
 
+    column_widths = (size_t *) malloc(sizeof(size_t) * command->column_count);
+    if (column_widths == NULL) {
+        set_error(error, error_size, "Out of memory while sizing SELECT output.");
+        goto cleanup;
+    }
+
     for (requested_index = 0; requested_index < command->column_count; ++requested_index) {
         requested_indices[requested_index] = find_column_index(header_columns, header_count, command->columns[requested_index]);
         if (requested_indices[requested_index] < 0) {
             set_error(error, error_size, "Requested column does not exist in table.");
             goto cleanup;
         }
-    }
-
-    for (requested_index = 0; requested_index < command->column_count; ++requested_index) {
-        if (requested_index > 0 && !append_text(output, &output_length, &output_capacity, ",", error, error_size)) {
-            goto cleanup;
-        }
-
-        if (!append_text(output, &output_length, &output_capacity, command->columns[requested_index], error, error_size)) {
-            goto cleanup;
-        }
-    }
-
-    if (!append_text(output, &output_length, &output_capacity, "\n", error, error_size)) {
-        goto cleanup;
+        column_widths[requested_index] = strlen(command->columns[requested_index]);
     }
 
     while ((row_line = read_line_alloc(file)) != NULL) {
+        char **selected_row = NULL;
+        char ***grown_rows = NULL;
+
         if (!split_csv_line(row_line, &row_columns, &row_count, error, error_size)) {
             goto cleanup;
         }
@@ -455,25 +561,69 @@ int storage_select_rows(const SqlCommand *command, char **output, char *error, s
             goto cleanup;
         }
 
-        for (requested_index = 0; requested_index < command->column_count; ++requested_index) {
-            if (requested_index > 0 && !append_text(output, &output_length, &output_capacity, ",", error, error_size)) {
-                goto cleanup;
-            }
-
-            if (!append_text(output, &output_length, &output_capacity, row_columns[requested_indices[requested_index]], error, error_size)) {
-                goto cleanup;
-            }
-        }
-
-        if (!append_text(output, &output_length, &output_capacity, "\n", error, error_size)) {
+        selected_row = (char **) malloc(sizeof(char *) * command->column_count);
+        if (selected_row == NULL) {
+            set_error(error, error_size, "Out of memory while storing SELECT row.");
             goto cleanup;
         }
+
+        for (requested_index = 0; requested_index < command->column_count; ++requested_index) {
+            selected_row[requested_index] = NULL;
+        }
+
+        for (requested_index = 0; requested_index < command->column_count; ++requested_index) {
+            size_t value_length = 0;
+
+            selected_row[requested_index] = duplicate_string(row_columns[requested_indices[requested_index]]);
+            if (selected_row[requested_index] == NULL) {
+                set_error(error, error_size, "Out of memory while copying SELECT value.");
+                free_string_list(selected_row, command->column_count);
+                goto cleanup;
+            }
+
+            value_length = strlen(selected_row[requested_index]);
+            if (value_length > column_widths[requested_index]) {
+                column_widths[requested_index] = value_length;
+            }
+        }
+
+        grown_rows = (char ***) realloc(selected_rows, sizeof(char **) * (selected_row_count + 1));
+        if (grown_rows == NULL) {
+            set_error(error, error_size, "Out of memory while growing SELECT rows.");
+            free_string_list(selected_row, command->column_count);
+            goto cleanup;
+        }
+
+        selected_rows = grown_rows;
+        selected_rows[selected_row_count++] = selected_row;
 
         free(row_line);
         row_line = NULL;
         free_string_list(row_columns, row_count);
         row_columns = NULL;
         row_count = 0;
+    }
+
+    if (!append_table_border(output, &output_length, &output_capacity, column_widths, command->column_count, error, error_size)) {
+        goto cleanup;
+    }
+
+    if (!append_table_row(output, &output_length, &output_capacity, command->columns, column_widths, command->column_count, error, error_size)) {
+        goto cleanup;
+    }
+
+    if (!append_table_border(output, &output_length, &output_capacity, column_widths, command->column_count, error, error_size)) {
+        goto cleanup;
+    }
+
+    for (row_index = 0; row_index < selected_row_count; ++row_index) {
+        if (!append_table_row(output, &output_length, &output_capacity, selected_rows[row_index], column_widths, command->column_count, error, error_size)) {
+            goto cleanup;
+        }
+    }
+
+    if (!append_table_border(output, &output_length, &output_capacity, column_widths, command->column_count, error, error_size)) {
+        goto cleanup;
     }
 
     ok = 1;
@@ -483,8 +633,15 @@ cleanup:
     free(header_line);
     free_string_list(header_columns, header_count);
     free(requested_indices);
+    free(column_widths);
     free(row_line);
     free_string_list(row_columns, row_count);
+    if (selected_rows != NULL) {
+        for (row_index = 0; row_index < selected_row_count; ++row_index) {
+            free_string_list(selected_rows[row_index], command->column_count);
+        }
+        free(selected_rows);
+    }
 
     if (!ok) {
         free(*output);
