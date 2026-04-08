@@ -117,8 +117,10 @@ PowerShell에서:
 
 예:
 
-```powershell
-.\build\sql_processor.exe input.sql
+```1. Developer PowerShell for VS 2022 키기
+2. 해당 폴더로 경로 이동 (예시 => C:\Jungle\week6-team7-sql-processor)
+3. 명령어 실행 => .\build\sql_processor.exe 
+4. sql> 이 뜨면 성공!
 ```
 
 ## 문서 안내
