@@ -550,7 +550,7 @@ int storage_append_row(const SqlCommand *command, char *error, size_t error_size
     fclose(read_file);
     read_file = NULL;
 
-    append_file = fopen(path, "ab");
+   append_file = fopen(path, "ab");
     if (append_file == NULL) {
         set_error(error, error_size, "Failed to open table file for appending.");
         goto cleanup;
