@@ -13,14 +13,15 @@
 
 ## 동작 방식
 
-전체 처리 흐름은 아래와 같습니다:
+**전체 처리 흐름**
 
 ```
-main  -->  run_cli  -->  command init  -->  parser  -->  executor  -->  storage -->  command free
+main  -->  run_cli  -->  command(init)  -->  parser  -->  executor  -->  storage -->  command(free)
          (명령 집행)     (구조체 초기화)     (파싱/할당)               (CSV 읽기/쓰기)  (메모리 해제)
 ```
+<br/>
 
-컴포넌트 다이어그램
+**컴포넌트 다이어그램**
 
 ```mermaid
 graph TD
@@ -36,18 +37,23 @@ graph TD
     CMD -. lifecycle init/free .-> CR
 
 ```
+=> 단 방향성 단일 체인이 아닌, cli_runner가 orchestration(흐름 조율)하는 구조.
 
-함수명 별 요약 기술
+<br/>
+
+**함수명 별 요약 기술**
 
 - main: 프로그램 시작점 => cli_runner.c로 제어권을 바로 넘김
 - cli_ruuner: 입력을 받아 파싱과 실행을 연결 
     ```
     run_cli
     -> run_cli_with_streams
-        -> read_file_to_string -> execute_sql_text (파일 모드: 경로를 명시한 파일 명령어를 읽음)
-        -> run_cli_interactive_with_streams (인터랙티브 모드: 직접 타이핑한 명령어를 읽음)
-            -> execute_sql_text (sql 명령어 실행)
-            -> is_exit_command (종료)    
+        -> run_cli_interactive_with_streams
+              -> execute_sql_text
+                  -> command (구조체 초기화)
+                  -> parser (파싱/구조체에 할당)
+                  -> executor (명령 실행)
+                  -> command (메모리 해제)    
     ```
 - parser: SQL명령어를 해석하여 SqlCommand 형태로 가공 (select <-> insert 분기)
     ```
@@ -59,9 +65,9 @@ graph TD
             values = ["1", "jungle"]
             value_count = 2
     ```
-- command: 메모리 생명 주기를 전담하여 관리(힙 영역)
+- command: 메모리/객체의 생명 주기를 관리하여 관리(힙 영역)
     ```
-    -> 파싱 된 데이터가(SqlCommand)가 힙에 할당
+    -> parser가 채워넣을 구조체(SqlCommand)를 초기화
     -> 처리가 끝나면, sql_command_free(&command)로 메모리 해제
     ```  
 - executor: INSERT/SELECT 분기 => 명령어가 비대해 질 경우, storage.c 파일 분리를 위해
@@ -72,23 +78,11 @@ graph TD
     SELECT 유틸: append_table_row(출력 문자열에 추가)..
     ```
 
-### `SqlCommand`의 역할
+### 왜 계층화를 하였는가?
 
-SQL 문자열을 바로 실행하는 것이 아니라, 먼저 구조화된 명령 형태로 바꾼 뒤 다음 단계로 넘기는 구조입니다.
+- 변경 격리: 한 기능을 바꾸어도 타 계층 영향 최소화
+- 확장성: 새 기능 추가 시 => 추가할 부위가 명확
 
-
-```sql
-INSERT INTO users (id, name) VALUES (1, 'jungle');
-```
-
-파싱 후 개념적으로 아래와 같은 정보로 바뀝니다.
-
-```text
-type = SQL_COMMAND_INSERT
-table_name = "users"
-columns = ["id", "name"]
-values = ["1", "jungle"]
-```
 
 ## 데이터 저장 방식
 
