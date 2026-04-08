@@ -259,3 +259,57 @@ data/           예제 CSV 테이블 파일
 - **이우진**: 구현 규모를 확장하지 않고 학습에 필요한 내용만으로 구현한 덕분에 코드를 이해하기 좋았고, 다같이 코드리뷰를 진행하여 내가 모르는 내용과 다른 사람이 모르는 내용을 같이 학습할 수 있
 - **이호준**: AI를 사용해서 빠르게 구현하고, 다같이 학습하는 방식으로 진행했는데 새롭게 학습하는 방식이 좋았습니다.
 - **황정연**: AI가 작성한 코드를 함께 리뷰를 하면서 이해도를 높일 수 있었습니다. 발표 내용을 어떻게 구성할지 고민을 하면서, 프로젝트에서 상대적으로 중요한 로직에 주목하여 가지로 뻗어나가듯 이해를 확장해 나갔습니다.
+
+## SELECT/INSERT 실행 시퀀스 다이어그램
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant M as main.c
+    participant C as cli_runner.c
+    participant P as parser.c
+    participant E as executor.c
+    participant S as storage.c
+    participant F as data/users.csv
+
+    U->>M: Run sql_processor and enter SQL
+    M->>C: run_cli(argc, argv)
+    C->>C: execute_sql_text(sql)
+    C->>P: parse_sql(sql, &command, error)
+    P-->>C: SqlCommand(type, table, columns, values?)
+    C->>E: execute_command(&command, &output, error)
+
+    alt command.type == INSERT
+        E->>S: storage_append_row(&command, error)
+        S->>F: open/read header and validate columns
+        S->>F: append new row to CSV
+        S-->>E: success/failure
+        E-->>C: output = "INSERT OK" (on success)
+    else command.type == SELECT
+        E->>S: storage_select_rows(&command, &output, error)
+        S->>F: open/read CSV header and rows
+        F-->>S: row data
+        S-->>E: formatted table string output
+        E-->>C: output
+    end
+
+    C-->>U: print result or error
+
+```
+
+## 컴포넌트 다이어그램
+
+```mermaid
+graph TD
+    U[User CLI] --> M[main.c]
+    M --> CR[cli_runner.c]
+    CR --> P[parser.c]
+    CR --> CMD[command.c]
+    CR --> E[executor.c]
+    E --> S[storage.c]
+    S --> D[(data/*.csv)]
+
+    P -. fills .-> CMD
+    CMD -. lifecycle init/free .-> CR
+
+```
