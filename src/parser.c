@@ -229,6 +229,12 @@ static int parse_select_columns(const char **cursor, char ***items, size_t *coun
     char *identifier = NULL;
     const char *probe = NULL;
 
+    skip_spaces(cursor);
+    if (**cursor == '*') {
+        set_error(error, error_size, "SELECT * is not supported.");
+        return 0;
+    }
+
     for (;;) {
         if (!parse_identifier(cursor, &identifier, error, error_size)) {
             return 0;
@@ -313,6 +319,36 @@ static int parse_value(const char **cursor, char **value, char *error, size_t er
     }
 
     *cursor = end;
+    return 1;
+}
+
+/*
+ * SELECT의 WHERE 절 하나를 파싱한다.
+ *
+ * 현재 구현은 `WHERE <column> = <value>` 형식 하나만 지원한다.
+ * 조건 값은 공통 SqlCommand 필드에 저장되고, 이후 Storage가 이를 사용해 행을 필터링한다.
+ */
+static int parse_where_clause(const char **cursor, SqlCommand *command, char *error, size_t error_size) {
+    if (!consume_keyword(cursor, "WHERE")) {
+        return 1;
+    }
+
+    if (!parse_identifier(cursor, &command->where_column, error, error_size)) {
+        return 0;
+    }
+
+    skip_spaces(cursor);
+    if (**cursor != '=') {
+        set_error(error, error_size, "Expected '=' in WHERE clause.");
+        return 0;
+    }
+    (*cursor)++;
+
+    if (!parse_value(cursor, &command->where_value, error, error_size)) {
+        return 0;
+    }
+
+    command->has_where = 1;
     return 1;
 }
 
@@ -526,6 +562,10 @@ static int parse_select(const char *statement, SqlCommand *command, char *error,
     }
 
     if (!parse_identifier(&cursor, &command->table_name, error, error_size)) {
+        return 0;
+    }
+
+    if (!parse_where_clause(&cursor, command, error, error_size)) {
         return 0;
     }
 

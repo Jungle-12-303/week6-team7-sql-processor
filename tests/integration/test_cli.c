@@ -90,6 +90,63 @@ static void test_cli_insert_and_select(void) {
     test_leave_directory(original_directory);
 }
 
+static void test_cli_select_with_where(void) {
+    char workspace[1024];
+    char original_directory[1024];
+    char table_path[1024];
+    FILE *stdout_file = NULL;
+    FILE *stderr_file = NULL;
+    char *stdout_contents = NULL;
+    char *stderr_contents = NULL;
+    char *argv_select[] = { "sql_processor", "select_where.sql" };
+
+    test_prepare_workspace("cli_select_where", workspace, sizeof(workspace));
+
+    test_join_path(table_path, sizeof(table_path), workspace, "data");
+    test_join_path(table_path, sizeof(table_path), table_path, "users.csv");
+    test_write_file(table_path, "id,name\n1,seed\n2,jungle\n3,Jungle\n");
+
+    {
+        char select_path[1024];
+        char stdout_path[1024];
+        char stderr_path[1024];
+
+        test_join_path(select_path, sizeof(select_path), workspace, "select_where.sql");
+        test_join_path(stdout_path, sizeof(stdout_path), workspace, "stdout.txt");
+        test_join_path(stderr_path, sizeof(stderr_path), workspace, "stderr.txt");
+
+        test_write_file(select_path, "SELECT id, name FROM users WHERE name = 'jungle';");
+        test_write_file(stdout_path, "");
+        test_write_file(stderr_path, "");
+    }
+
+    test_enter_directory(workspace, original_directory, sizeof(original_directory));
+
+    stdout_file = fopen("stdout.txt", "wb+");
+    stderr_file = fopen("stderr.txt", "wb+");
+    ASSERT_TRUE(stdout_file != NULL);
+    ASSERT_TRUE(stderr_file != NULL);
+    ASSERT_EQ_INT(0, run_cli_with_streams(2, argv_select, stdout_file, stderr_file));
+    fclose(stdout_file);
+    fclose(stderr_file);
+
+    stdout_contents = test_read_file("stdout.txt");
+    stderr_contents = test_read_file("stderr.txt");
+    ASSERT_STREQ(
+        "+----+--------+\n"
+        "| id | name   |\n"
+        "+----+--------+\n"
+        "| 2  | jungle |\n"
+        "+----+--------+\n",
+        stdout_contents
+    );
+    ASSERT_STREQ("", stderr_contents);
+
+    free(stdout_contents);
+    free(stderr_contents);
+    test_leave_directory(original_directory);
+}
+
 static void test_cli_bad_sql_reports_error(void) {
     char workspace[1024];
     char original_directory[1024];
@@ -129,6 +186,51 @@ static void test_cli_bad_sql_reports_error(void) {
     stderr_contents = test_read_file("stderr.txt");
     ASSERT_STREQ("", stdout_contents);
     ASSERT_TRUE(strstr(stderr_contents, "Statement must end with ';'") != NULL);
+
+    free(stdout_contents);
+    free(stderr_contents);
+    test_leave_directory(original_directory);
+}
+
+static void test_cli_select_star_reports_error(void) {
+    char workspace[1024];
+    char original_directory[1024];
+    FILE *stdout_file = NULL;
+    FILE *stderr_file = NULL;
+    char *stdout_contents = NULL;
+    char *stderr_contents = NULL;
+    char *argv_bad[] = { "sql_processor", "bad.sql" };
+
+    test_prepare_workspace("cli_select_star", workspace, sizeof(workspace));
+
+    {
+        char bad_sql_path[1024];
+        char stdout_path[1024];
+        char stderr_path[1024];
+
+        test_join_path(bad_sql_path, sizeof(bad_sql_path), workspace, "bad.sql");
+        test_join_path(stdout_path, sizeof(stdout_path), workspace, "stdout.txt");
+        test_join_path(stderr_path, sizeof(stderr_path), workspace, "stderr.txt");
+
+        test_write_file(bad_sql_path, "SELECT * FROM users;");
+        test_write_file(stdout_path, "");
+        test_write_file(stderr_path, "");
+    }
+
+    test_enter_directory(workspace, original_directory, sizeof(original_directory));
+
+    stdout_file = fopen("stdout.txt", "wb+");
+    stderr_file = fopen("stderr.txt", "wb+");
+    ASSERT_TRUE(stdout_file != NULL);
+    ASSERT_TRUE(stderr_file != NULL);
+    ASSERT_EQ_INT(1, run_cli_with_streams(2, argv_bad, stdout_file, stderr_file));
+    fclose(stdout_file);
+    fclose(stderr_file);
+
+    stdout_contents = test_read_file("stdout.txt");
+    stderr_contents = test_read_file("stderr.txt");
+    ASSERT_STREQ("", stdout_contents);
+    ASSERT_TRUE(strstr(stderr_contents, "SELECT * is not supported.") != NULL);
 
     free(stdout_contents);
     free(stderr_contents);
@@ -331,13 +433,74 @@ static void test_cli_interactive_insert_and_select(void) {
     test_leave_directory(original_directory);
 }
 
+static void test_cli_interactive_select_with_where(void) {
+    char workspace[1024];
+    char original_directory[1024];
+    char table_path[1024];
+    FILE *input_file = NULL;
+    FILE *stdout_file = NULL;
+    FILE *stderr_file = NULL;
+    char *stdout_contents = NULL;
+    char *stderr_contents = NULL;
+
+    test_prepare_workspace("cli_interactive_where", workspace, sizeof(workspace));
+
+    test_join_path(table_path, sizeof(table_path), workspace, "data");
+    test_join_path(table_path, sizeof(table_path), table_path, "users.csv");
+    test_write_file(table_path, "id,name\n1,seed\n2,jungle\n");
+
+    {
+        char input_path[1024];
+        char stdout_path[1024];
+        char stderr_path[1024];
+
+        test_join_path(input_path, sizeof(input_path), workspace, "interactive.txt");
+        test_join_path(stdout_path, sizeof(stdout_path), workspace, "stdout.txt");
+        test_join_path(stderr_path, sizeof(stderr_path), workspace, "stderr.txt");
+
+        test_write_file(
+            input_path,
+            "SELECT id, name FROM users WHERE name = 'jungle';\n"
+            "exit\n"
+        );
+        test_write_file(stdout_path, "");
+        test_write_file(stderr_path, "");
+    }
+
+    test_enter_directory(workspace, original_directory, sizeof(original_directory));
+
+    input_file = fopen("interactive.txt", "rb");
+    stdout_file = fopen("stdout.txt", "wb+");
+    stderr_file = fopen("stderr.txt", "wb+");
+    ASSERT_TRUE(input_file != NULL);
+    ASSERT_TRUE(stdout_file != NULL);
+    ASSERT_TRUE(stderr_file != NULL);
+    ASSERT_EQ_INT(0, run_cli_interactive_with_streams(input_file, stdout_file, stderr_file));
+    fclose(input_file);
+    fclose(stdout_file);
+    fclose(stderr_file);
+
+    stdout_contents = test_read_file("stdout.txt");
+    stderr_contents = test_read_file("stderr.txt");
+
+    ASSERT_TRUE(strstr(stdout_contents, "| 2  | jungle |\n") != NULL);
+    ASSERT_STREQ("", stderr_contents);
+
+    free(stdout_contents);
+    free(stderr_contents);
+    test_leave_directory(original_directory);
+}
+
 int main(void) {
     test_cli_insert_and_select();
+    test_cli_select_with_where();
     test_cli_bad_sql_reports_error();
+    test_cli_select_star_reports_error();
     test_cli_missing_input_file_reports_error();
     test_cli_empty_sql_reports_error();
     test_cli_whitespace_sql_reports_error();
     test_cli_interactive_insert_and_select();
+    test_cli_interactive_select_with_where();
     printf("test_cli passed\n");
     return 0;
 }

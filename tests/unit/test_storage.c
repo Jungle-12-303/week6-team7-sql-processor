@@ -1,4 +1,4 @@
-﻿#include "command.h"
+#include "command.h"
 #include "storage.h"
 
 #include <stdio.h>
@@ -65,6 +65,87 @@ static void test_append_and_select(void) {
     free(select_output);
     sql_command_free(&insert_command);
     sql_command_free(&select_command);
+    test_leave_directory(original_directory);
+}
+
+static void test_select_with_where_filters_rows(void) {
+    char workspace[1024];
+    char original_directory[1024];
+    char table_path[1024];
+    char *select_output = NULL;
+    char error[256];
+    SqlCommand command;
+
+    test_prepare_workspace("storage_where_filter", workspace, sizeof(workspace));
+    test_join_path(table_path, sizeof(table_path), workspace, "data");
+    test_join_path(table_path, sizeof(table_path), table_path, "users.csv");
+    test_write_file(table_path, "id,name\n1,seed\n2,jungle\n3,Jungle\n");
+
+    test_enter_directory(workspace, original_directory, sizeof(original_directory));
+
+    sql_command_init(&command);
+    command.type = SQL_COMMAND_SELECT;
+    command.table_name = test_strdup("users");
+    command.column_count = 2;
+    command.columns = (char **) malloc(sizeof(char *) * 2);
+    command.columns[0] = test_strdup("id");
+    command.columns[1] = test_strdup("name");
+    command.has_where = 1;
+    command.where_column = test_strdup("name");
+    command.where_value = test_strdup("jungle");
+
+    ASSERT_TRUE(storage_select_rows(&command, &select_output, error, sizeof(error)));
+    ASSERT_STREQ(
+        "+----+--------+\n"
+        "| id | name   |\n"
+        "+----+--------+\n"
+        "| 2  | jungle |\n"
+        "+----+--------+\n",
+        select_output
+    );
+
+    free(select_output);
+    sql_command_free(&command);
+    test_leave_directory(original_directory);
+}
+
+static void test_select_with_where_empty_result_prints_empty_table(void) {
+    char workspace[1024];
+    char original_directory[1024];
+    char table_path[1024];
+    char *select_output = NULL;
+    char error[256];
+    SqlCommand command;
+
+    test_prepare_workspace("storage_where_empty", workspace, sizeof(workspace));
+    test_join_path(table_path, sizeof(table_path), workspace, "data");
+    test_join_path(table_path, sizeof(table_path), table_path, "users.csv");
+    test_write_file(table_path, "id,name\n1,seed\n");
+
+    test_enter_directory(workspace, original_directory, sizeof(original_directory));
+
+    sql_command_init(&command);
+    command.type = SQL_COMMAND_SELECT;
+    command.table_name = test_strdup("users");
+    command.column_count = 2;
+    command.columns = (char **) malloc(sizeof(char *) * 2);
+    command.columns[0] = test_strdup("id");
+    command.columns[1] = test_strdup("name");
+    command.has_where = 1;
+    command.where_column = test_strdup("name");
+    command.where_value = test_strdup("jungle");
+
+    ASSERT_TRUE(storage_select_rows(&command, &select_output, error, sizeof(error)));
+    ASSERT_STREQ(
+        "+----+------+\n"
+        "| id | name |\n"
+        "+----+------+\n"
+        "+----+------+\n",
+        select_output
+    );
+
+    free(select_output);
+    sql_command_free(&command);
     test_leave_directory(original_directory);
 }
 
@@ -186,6 +267,8 @@ static void test_corrupted_csv_row_fails(void) {
 
 int main(void) {
     test_append_and_select();
+    test_select_with_where_filters_rows();
+    test_select_with_where_empty_result_prints_empty_table();
     test_select_missing_column_fails();
     test_missing_table_fails();
     test_insert_value_with_comma_fails();

@@ -32,6 +32,10 @@ typedef enum SqlCommandType {
  * values / value_count:
  *   INSERT의 VALUES 절에 들어 있는 값 목록과 개수다.
  *   SELECT에서는 사용하지 않으므로 비어 있을 수 있다.
+ *
+ * has_where / where_column / where_value:
+ *   현재는 SELECT에서만 사용하는 공통 조건 표현 필드다.
+ *   WHERE 절이 있으면 has_where가 1이고, 비교할 컬럼과 값이 채워진다.
  */
 typedef struct SqlCommand {
     SqlCommandType type;
@@ -40,6 +44,9 @@ typedef struct SqlCommand {
     size_t column_count;
     char **values;
     size_t value_count;
+    int has_where;
+    char *where_column;
+    char *where_value;
 } SqlCommand;
 
 /* SqlCommand 구조체를 안전한 초기 상태로 만든다.

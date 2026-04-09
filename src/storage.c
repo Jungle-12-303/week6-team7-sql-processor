@@ -68,6 +68,15 @@ static int equals_ignore_case(const char *left, const char *right) {
     return left[index] == '\0' && right[index] == '\0';
 }
 
+/* WHERE 값 비교는 대소문자를 구분하는 정확한 문자열 일치로 처리한다. */
+static int equals_exact(const char *left, const char *right) {
+    if (left == NULL || right == NULL) {
+        return 0;
+    }
+
+    return strcmp(left, right) == 0;
+}
+
 /*
  * 파일에서 읽어 온 줄 끝의 개행 문자를 제거한다.
  *
@@ -604,6 +613,7 @@ int storage_select_rows(const SqlCommand *command, char **output, char *error, s
     char **row_columns = NULL;
     char ***selected_rows = NULL;
     int *requested_indices = NULL;
+    int where_index = -1;
     size_t *column_widths = NULL;
     size_t header_count = 0;
     size_t row_count = 0;
@@ -664,6 +674,14 @@ int storage_select_rows(const SqlCommand *command, char **output, char *error, s
         column_widths[requested_index] = strlen(command->columns[requested_index]);
     }
 
+    if (command->has_where) {
+        where_index = find_column_index(header_columns, header_count, command->where_column);
+        if (where_index < 0) {
+            set_error(error, error_size, "WHERE column does not exist in table.");
+            goto cleanup;
+        }
+    }
+
     while ((row_line = read_line_alloc(file)) != NULL) {
         char **selected_row = NULL;
         char ***grown_rows = NULL;
@@ -684,6 +702,15 @@ int storage_select_rows(const SqlCommand *command, char **output, char *error, s
         if (row_count != header_count) {
             set_error(error, error_size, "CSV row does not match header column count.");
             goto cleanup;
+        }
+
+        if (command->has_where && !equals_exact(row_columns[where_index], command->where_value)) {
+            free(row_line);
+            row_line = NULL;
+            free_string_list(row_columns, row_count);
+            row_columns = NULL;
+            row_count = 0;
+            continue;
         }
 
         selected_row = (char **) malloc(sizeof(char *) * command->column_count);

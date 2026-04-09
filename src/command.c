@@ -19,6 +19,9 @@ void sql_command_init(SqlCommand *command) {
     command->column_count = 0;
     command->values = NULL;
     command->value_count = 0;
+    command->has_where = 0;
+    command->where_column = NULL;
+    command->where_value = NULL;
 }
 
 /*
@@ -50,6 +53,8 @@ void sql_command_free(SqlCommand *command) {
 
     free(command->columns);
     free(command->values);
+    free(command->where_column);
+    free(command->where_value);
 
     sql_command_init(command);
 }
