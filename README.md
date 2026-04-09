@@ -2,14 +2,15 @@
 
 이 프로젝트는 수요코딩회 과제인 **SQL 처리기(Processor) 구현**을 목표로 만든 C 언어 프로젝트입니다.
 텍스트 파일로 작성된 SQL 문을 CLI로 전달받아 파싱하고, 실행하고, 파일에 저장하는 전체 흐름을 구현했습니다.
+현재 `WHERE`는 `SELECT`에만 적용되지만, 내부적으로는 향후 `UPDATE`/`DELETE`에도 재사용 가능한 공통 조건 표현으로 다룹니다.
 
 ## 주요 기능
 
-`SQL 파일 입력 처리` `interactive SQL 입력 처리` `INSERT 지원` `SELECT 지원` `CSV 파일 기반 데이터 저장/조회` `SELECT 결과 표 형식 출력` `단위 테스트 및 통합 테스트 제공`
+`SQL 파일 입력 처리` `interactive SQL 입력 처리` `INSERT 지원` `SELECT 지원` `SELECT ... WHERE <column> = <value> 지원` `공통 WHERE 조건 표현 도입` `CSV 파일 기반 데이터 저장/조회` `SELECT 결과 표 형식 출력` `단위 테스트 및 통합 테스트 제공`
 
 ## 지원하지 않는 기능
 
-`CREATE TABLE` `UPDATE` `DELETE` `JOIN` `WHERE` `트랜잭션` `별도 스키마 메타데이터` `타입 검증`
+`CREATE TABLE` `UPDATE` `DELETE` `JOIN` `SELECT *` `복합 WHERE 조건` `WHERE 비교 연산자 확장` `트랜잭션` `별도 스키마 메타데이터` `타입 검증`
 
 ## 동작 방식
 
@@ -55,15 +56,16 @@ graph TD
                   -> executor (명령 실행)
                   -> command (메모리 해제)    
     ```
-- parser: SQL명령어를 해석하여 SqlCommand 형태로 가공 (select <-> insert 분기)
+- parser: SQL명령어를 해석하여 SqlCommand 형태로 가공 (select <-> insert 분기, 공통 `WHERE` 조건 추출)
     ```
-    파싱 전: INSERT INTO users (id, name) VALUES (1, 'jungle');
-    파싱 후: type = SQL_COMMAND_INSERT
+    파싱 전: SELECT id, name FROM users WHERE name = 'jungle';
+    파싱 후: type = SQL_COMMAND_SELECT
             table_name = "users"
             columns = ["id", "name"]
             column_count = 2
-            values = ["1", "jungle"]
-            value_count = 2
+            has_where = 1
+            where_column = "name"
+            where_value = "jungle"
     ```
 - command: 메모리/객체의 생명 주기를 관리하여 관리(힙 영역)
     ```
@@ -75,7 +77,7 @@ graph TD
     ```
     COMMON 유틸: build_data_path(파일 경로), read_line_alloc(동적 메모리로 읽기)..
     INSERT 유틸: validate_insert_value(입력값 검증)..
-    SELECT 유틸: append_table_row(출력 문자열에 추가)..
+    SELECT 유틸: append_table_row(출력 문자열에 추가), WHERE 조건 비교..
     ```
 
 ### 왜 계층화를 하였는가?
@@ -123,6 +125,7 @@ INSERT INTO users (id, name) VALUES (1, 'jungle');
 
 ```sql
 SELECT id, name FROM users;
+SELECT id, name FROM users WHERE name = 'jungle';
 ```
 
 주의:
@@ -130,6 +133,11 @@ SELECT id, name FROM users;
 - 세미콜론(`;`)은 필수입니다.
 - 파일 입력 모드에서는 한 번에 SQL 문 1개만 처리합니다.
 - interactive 모드에서도 한 줄에 SQL 문 1개를 입력합니다.
+- `WHERE`는 `SELECT`에서만 사용할 수 있습니다.
+- 다만 내부적으로는 공통 조건 표현으로 저장되어, 이후 `UPDATE`/`DELETE` 확장 시 재사용할 수 있도록 설계합니다.
+- 지원 형식은 `WHERE <column> = <value>` 한 개입니다.
+- 문자열 비교는 단일 인용부호를 제거한 뒤 대소문자를 구분하여 정확히 비교합니다.
+- `SELECT *`는 지원하지 않습니다.
 
 ## 빌드 방법
 
@@ -197,7 +205,7 @@ sql> exit
 
 `INSERT` 성공 시에는 `INSERT OK`를 출력합니다.
 
-`SELECT`는 요청한 컬럼 순서를 유지한 표 형식으로 출력합니다.
+`SELECT`는 요청한 컬럼 순서를 유지한 표 형식으로 출력합니다. `WHERE` 결과가 비어 있어도 같은 형식을 유지하며 헤더와 테두리는 출력합니다.
 
 ```sql
 SELECT name, id FROM users;
